@@ -4,6 +4,276 @@
 == Introduction
 This document provides the complete code implementation for the Excel Comparison Tool, as specified in the Low-Level Design (LLD). The tool consists of a .NET 6 backend using EPPlus for Excel processing and an Angular 17 frontend for file uploads, diff visualization, and summary reports. The implementation covers core features: comparing cell values and formulas, generating highlighted output files, and displaying differences in a web interface. Optional features like merge and formatting comparison are noted as extensible.
 
+== Design Details
+
+=== Backend Design (.NET 6)
+
+==== Class Diagram
+....
+[ExcelFile]
+  - Worksheets: List<Worksheet>
+  - Metadata: Dictionary<string, string>
+  + GetWorksheet(name: string): Worksheet
+
+[Worksheet]
+  - Name: string
+  - Cells: Cell[,]
+  - Rows: int
+  - Columns: int
+  + GetCell(row: int, col: int): Cell
+
+[Cell]
+  - Row: int
+  - Column: int
+  - Value: string
+  - Formula: string
+  - Style: CellStyle
+  + IsEmpty(): bool
+
+[CellStyle]
+  - Font: string
+  - BackgroundColor: string
+
+[DiffModel]
+  - CellDiffs: List<CellDiff>
+  - StructuralDiffs: List<StructuralDiff>
+  - Summary: Summary
+  + AddCellDiff(diff: CellDiff): void
+
+[CellDiff]
+  - Row: int
+  - Column: int
+  - OldValue: string
+  - NewValue: string
+  - OldFormula: string
+  - NewFormula: string
+
+[StructuralDiff]
+  - Type: string (e.g., "RowAdded", "ColumnDeleted")
+  - Details: string
+
+[Summary]
+  - TotalCellChanges: int
+  - TotalFormulaChanges: int
+  - TotalStructuralChanges: int
+
+[ComparisonConfig]
+  - CompareValues: bool
+  - CompareFormulas: bool
+  - CompareFormatting: bool
+....
+
+==== Class Descriptions
+- *ExcelFile*: Represents an Excel workbook with a list of worksheets and metadata (e.g., author, last modified).
+- *Worksheet*: Represents a sheet with a 2D array of cells, row/column counts, and name.
+- *Cell*: Stores cell data (value, formula, style) and position.
+- *CellStyle*: Captures formatting (font, background color).
+- *DiffModel*: Aggregates comparison results, including cell differences, structural differences, and summary.
+- *CellDiff*: Represents a single cell difference (value or formula).
+- *StructuralDiff*: Describes structural changes (e.g., added rows).
+- *Summary*: Summarizes total changes.
+- *ComparisonConfig*: Specifies comparison scope (values, formulas, formatting).
+
+==== Backend Components
+- *ExcelReaderService*:
+  - Responsibility: Reads .xlsx files using EPPlus, populating `ExcelFile` models.
+  - Methods:
+    - `Task<ExcelFile> ReadAsync(Stream stream)`: Loads file into `ExcelFile`.
+  - Dependencies: EPPlus, Logger.
+- *ExcelWriterService*:
+  - Responsibility: Generates output .xlsx files with highlighted differences.
+  - Methods:
+    - `Task<Stream> WriteAsync(DiffModel diffModel)`: Creates output file with red highlights for changed cells.
+  - Dependencies: EPPlus, Logger.
+- *ComparisonEngine*:
+  - Responsibility: Compares two `ExcelFile` objects, producing a `DiffModel`.
+  - Methods:
+    - `Task<DiffModel> CompareAsync(Stream file1, Stream file2, ComparisonConfig config)`: Compares files based on config.
+  - Dependencies: ExcelReaderService, Logger.
+- *MergeHandler*:
+  - Responsibility: Applies merge operations to update an Excel file.
+  - Methods:
+    - `Task<Stream> MergeAsync(Stream baseFile, List<CellDiff> acceptedDiffs)`: Updates file with accepted changes.
+  - Dependencies: ExcelWriterService, Logger.
+- *ReportGenerator*:
+  - Responsibility: Creates summary reports.
+  - Methods:
+    - `Summary GenerateSummary(DiffModel diffModel)`: Generates summary data.
+  - Dependencies: None.
+- *Logger*:
+  - Responsibility: Logs operations and errors using Serilog.
+  - Methods:
+    - `LogInfo(string message)`: Logs informational messages.
+    - `LogError(Exception ex, string message)`: Logs errors.
+- *ErrorHandler*:
+  - Responsibility: Handles exceptions and returns user-friendly messages.
+  - Methods:
+    - `string Handle(Exception ex)`: Converts exceptions to messages.
+
+==== API Endpoints
+[cols="1,1,2",options="header"]
+|===
+| Endpoint | Method | Description
+| `/api/comparison/compare` | POST | Uploads two .xlsx files, returns `DiffModel` as JSON.
+| `/api/comparison/merge` | POST | Applies merge operations, returns updated file stream.
+| `/api/comparison/download` | GET | Downloads output .xlsx file with highlighted differences.
+| `/api/comparison/summary` | GET | Returns summary report as JSON.
+|===
+
+==== API Implementation Details
+- *POST /api/comparison/compare*:
+  - Input: Multipart form data with two files (`file1`, `file2`) and `ComparisonConfig`.
+  - Workflow:
+    1. Validate file extensions and sizes.
+    2. Call `ExcelReaderService.ReadAsync` for both files.
+    3. Pass `ExcelFile` objects to `ComparisonEngine.CompareAsync`.
+    4. Return `DiffModel` as JSON.
+  - Response: HTTP 200 with `DiffModel` or 400 for invalid inputs.
+- *POST /api/comparison/merge*:
+  - Input: Base file and list of accepted `CellDiff` objects.
+  - Workflow:
+    1. Validate inputs.
+    2. Call `MergeHandler.MergeAsync` to update file.
+    3. Return updated file stream.
+  - Response: HTTP 200 with file stream or 400 for errors.
+- *GET /api/comparison/download*:
+  - Workflow: Call `ExcelWriterService.WriteAsync` with cached `DiffModel`, return file stream.
+  - Response: HTTP 200 with .xlsx file.
+- *GET /api/comparison/summary*:
+  - Workflow: Call `ReportGenerator.GenerateSummary` with cached `DiffModel`.
+  - Response: HTTP 200 with `Summary` JSON.
+
+==== Backend Workflow
+1. User uploads files via Angular frontend.
+2. API controller validates inputs and saves files temporarily.
+3. `ExcelReaderService` loads files into `ExcelFile` models.
+4. `ComparisonEngine` compares files, producing a `DiffModel`.
+5. `ExcelWriterService` generates an output .xlsx file with highlighted differences.
+6. `ReportGenerator` creates a summary.
+7. API returns `DiffModel` or file stream to frontend.
+8. For merge, `MergeHandler` updates the base file based on user selections.
+
+=== Frontend Design (Angular 17)
+
+==== Component Diagram
+....
+[AppComponent]
+  |
+  +--[FileUploadComponent]
+  +--[DiffViewerComponent]
+  +--[MergeComponent]
+  +--[SummaryComponent]
+....
+
+==== Angular Components
+- *FileUploadComponent*:
+  - Responsibility: Allows users to upload two .xlsx files and set comparison options.
+  - Template: `file-upload.component.html` with drag-and-drop inputs and Angular Material button.
+  - Properties:
+    - `file1: File`: First Excel file.
+    - `file2: File`: Second Excel file.
+    - `config: ComparisonConfig`: Comparison options.
+  - Methods:
+    - `onFileChange(event: Event, fileNumber: number)`: Updates file properties.
+    - `compare()`: Calls `ComparisonService.compare`.
+  - Dependencies: ComparisonService, Angular Material.
+- *DiffViewerComponent*:
+  - Responsibility: Displays differences in a side-by-side or inline table.
+  - Template: `diff-viewer.component.html` with Angular Material table or PrimeNG DataTable.
+  - Properties:
+    - `diffModel: DiffModel`: Comparison results.
+  - Methods:
+    - `ngOnInit()`: Fetches `DiffModel` from `ComparisonService`.
+  - Dependencies: ComparisonService, Angular Material/PrimeNG.
+- *MergeComponent*:
+  - Responsibility: Allows users to accept/reject changes.
+  - Template: `merge.component.html` with checkboxes for each `CellDiff`.
+  - Properties:
+    - `diffModel: DiffModel`: Comparison results.
+    - `acceptedDiffs: CellDiff[]`: User-selected changes.
+  - Methods:
+    - `acceptDiff(diff: CellDiff)`: Adds diff to `acceptedDiffs`.
+    - `merge()`: Calls `MergeService.merge`.
+  - Dependencies: MergeService, Angular Material.
+- *SummaryComponent*:
+  - Responsibility: Displays summary report.
+  - Template: `summary.component.html` with summary stats and download button.
+  - Properties:
+    - `summary: Summary`: Summary data.
+  - Methods:
+    - `ngOnInit()`: Fetches summary from `ComparisonService`.
+    - `download()`: Calls `ComparisonService.download`.
+  - Dependencies: ComparisonService, Angular Material.
+
+==== Angular Services
+- *ComparisonService*:
+  - Responsibility: Handles API calls for comparison and download.
+  - Methods:
+    - `compare(file1: File, file2: File, config: ComparisonConfig): Observable<DiffModel>`: Calls `/api/comparison/compare`.
+    - `download(): Observable<Blob>`: Calls `/api/comparison/download`.
+    - `getSummary(): Observable<Summary>`: Calls `/api/comparison/summary`.
+  - Dependencies: HttpClient.
+- *MergeService*:
+  - Responsibility: Handles merge API calls.
+  - Methods:
+    - `merge(baseFile: File, acceptedDiffs: CellDiff[]): Observable<Blob>`: Calls `/api/comparison/merge`.
+  - Dependencies: HttpClient.
+
+==== Frontend Models
+- `cell-diff.ts`:
+```typescript
+export interface CellDiff {
+  row: number;
+  column: number;
+  oldValue: string;
+  newValue: string;
+  oldFormula: string;
+  newFormula: string;
+}
+```
+- `summary.ts`:
+```typescript
+export interface Summary {
+  totalCellChanges: number;
+  totalFormulaChanges: number;
+  totalStructuralChanges: number;
+}
+```
+
+==== Routing
+- Routes defined in `app-routing.module.ts`:
+  - `/upload`: FileUploadComponent
+  - `/diff`: DiffViewerComponent
+  - `/merge`: MergeComponent
+  - `/summary`: SummaryComponent
+
+==== Frontend Workflow
+1. User navigates to `/upload`, selects two .xlsx files, and sets comparison options.
+2. `FileUploadComponent` calls `ComparisonService.compare`, sending files to the backend.
+3. Backend returns `DiffModel`, stored in `ComparisonService`.
+4. User navigates to `/diff`, where `DiffViewerComponent` displays differences in a table.
+5. User navigates to `/merge`, selects changes in `MergeComponent`, and calls `MergeService.merge`.
+6. User navigates to `/summary`, where `SummaryComponent` shows stats and offers a download link.
+
+=== Database/Storage
+- *Temporary Storage*: Store uploaded files in a server-side temp directory (e.g., `wwwroot/temp`).
+- *Cleanup*: Delete temp files after 1 hour or on session end.
+- *Caching*: Use `IMemoryCache` to store `DiffModel` for 10 minutes to optimize download/summary requests.
+
+=== Error Handling
+- *Backend*:
+  - Validate file extensions (.xlsx) and sizes (<100MB).
+  - Return HTTP 400 for invalid inputs, 500 for server errors.
+  - Log errors with Serilog (e.g., file corruption, out-of-memory).
+- *Frontend*:
+  - Display errors in Angular Material dialogs (e.g., "Invalid file format").
+  - Log client-side errors to console.
+
+=== Logging
+- *Backend*: Use Serilog to log file uploads, comparison steps, and errors to a file (`logs/log.txt`).
+- *Frontend*: Log API call results and errors to browser console.
+
+
 == Folder Structure
 The project follows the folder structure from the LLD:
 
