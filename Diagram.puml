@@ -1,0 +1,54 @@
+@startuml ComparisonEngine Workflow
+
+actor User
+participant "ComparisonController" as Controller
+participant "ComparisonEngine" as Engine
+participant "ExcelReaderService" as Reader
+participant "ExcelFile" as File
+participant "Worksheet" as Sheet
+participant "DiffModel" as Diff
+
+User -> Controller: POST /api/comparison/compare (file1, file2, config)
+Controller -> Engine: CompareAsync(file1, file2, config)
+Engine -> Reader: ReadAsync(file1)
+Reader -> File: Create ExcelFile
+File -> Sheet: Create Worksheet(s)
+Reader -> Engine: Return ExcelFile1
+Engine -> Reader: ReadAsync(file2)
+Reader -> File: Create ExcelFile
+File -> Sheet: Create Worksheet(s)
+Reader -> Engine: Return ExcelFile2
+Engine -> Diff: Create DiffModel
+loop for each Worksheet in ExcelFile1
+    Engine -> Sheet: GetWorksheet(name)
+    alt Worksheet exists in ExcelFile2
+        Engine -> Sheet: Compare MergedCells
+        loop for each MergedCellRange in Worksheet1
+            Engine -> Sheet: Find MergedCellRange in Worksheet2
+            alt MergedCellRange exists
+                Engine -> Diff: AddCellDiff (MergedRange, Values/Formulas)
+            else
+                Engine -> Diff: AddCellDiff (MergedRange Missing)
+            end
+        end
+        Engine -> Sheet: Compare Non-Merged Cells
+        loop for each Cell (row, col)
+            alt Not in MergedCellRange
+                Engine -> Sheet: GetCell(row, col)
+                alt CompareValues and Values Differ
+                    Engine -> Diff: AddCellDiff (Value)
+                end
+                alt CompareFormulas and Formulas Differ
+                    Engine -> Diff: AddCellDiff (Formula)
+                end
+            end
+        end
+    else
+        Engine -> Diff: AddStructuralDiff (SheetMissing)
+    end
+end
+Engine -> Controller: Return DiffModel
+Controller -> User: Return DiffModel (JSON)
+Engine -> Logger: Log Completion
+
+@enduml

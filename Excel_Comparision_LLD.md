@@ -1,230 +1,594 @@
 ```
-= Excel Comparison Tool: Full Code Implementation
+= Excel Comparison Tool: Full Code Implementation with Merged Cell Support
 
 == Introduction
-This document provides the complete code implementation for the Excel Comparison Tool, as specified in the Low-Level Design (LLD). The tool consists of a .NET 6 backend using EPPlus for Excel processing and an Angular 17 frontend for file uploads, diff visualization, and summary reports. The implementation covers core features: comparing cell values and formulas, generating highlighted output files, and displaying differences in a web interface. Optional features like merge and formatting comparison are noted as extensible.
+This document provides the updated code implementation for the Excel Comparison Tool, extending the previous implementation to support merged cell use cases. The tool compares two Excel files (.xlsx) for differences in cell values, formulas, and now merged cell ranges, using a .NET 6 backend with EPPlus and an Angular 17 frontend. The implementation covers file uploads, comparison, diff visualization, output generation, summary reports, and merged cell comparison. The merge functionality remains a future enhancement.
 
-== System Overview
-The tool consists of a .NET 6 Web API backend and an Angular 17 frontend, communicating via RESTful APIs. The backend processes Excel files using EPPlus, comparing cell values and formulas, and generating highlighted output files. The frontend provides a responsive UI for file uploads, diff visualization, merge operations, and summary reports, inspired by code comparison tools like Beyond Compare.
+== Folder Structure
+The folder structure remains the same as in the previous implementation, with updates to specific files:
 
-== Design Details
+```
+ExcelComparisonTool/
+├── backend/
+│   ├── src/
+│   │   ├── ExcelComparisonTool.Core/
+│   │   │   ├── Models/
+│   │   │   │   ├── ExcelFile.cs
+│   │   │   │   ├── Worksheet.cs
+│   │   │   │   ├── Cell.cs
+│   │   │   │   ├── DiffModel.cs
+│   │   │   │   ├── CellDiff.cs
+│   │   │   │   ├── StructuralDiff.cs
+│   │   │   │   ├── Summary.cs
+│   │   │   │   ├── ComparisonConfig.cs
+│   │   │   │   └── MergedCellRange.cs
+│   │   │   ├── Services/
+│   │   │   │   ├── ExcelReaderService.cs
+│   │   │   │   ├── ExcelWriterService.cs
+│   │   │   │   ├── ComparisonEngine.cs
+│   │   │   │   └── ReportGenerator.cs
+│   │   │   ├── Utilities/
+│   │   │   │   ├── Logger.cs
+│   │   │   │   └── ErrorHandler.cs
+│   │   │   ├── ExcelComparisonTool.Core.csproj
+│   │   │   └── appsettings.json
+│   │   ├── ExcelComparisonTool.Api/
+│   │   │   ├── Controllers/
+│   │   │   │   └── ComparisonController.cs
+│   │   │   ├── Program.cs
+│   │   │   ├── ExcelComparisonTool.Api.csproj
+│   │   │   └── appsettings.json
+│   ├── tests/
+│   │   ├── ExcelComparisonTool.Tests/
+│   │   │   ├── UnitTests/
+│   │   │   │   ├── ComparisonEngineTests.cs
+│   │   │   ├── TestData/
+│   │   │   │   ├── TestSheet1.xlsx
+│   │   │   │   └── TestSheet2.xlsx
+│   │   │   └── ExcelComparisonTool.Tests.csproj
+├── frontend/
+│   ├── excel-comparison-tool/
+│   │   ├── src/
+│   │   │   ├── app/
+│   │   │   │   ├── components/
+│   │   │   │   │   ├── file-upload/
+│   │   │   │   │   │   ├── file-upload.component.ts
+│   │   │   │   │   │   ├── file-upload.component.html
+│   │   │   │   │   │   └── file-upload.component.css
+│   │   │   │   │   ├── diff-viewer/
+│   │   │   │   │   │   ├── diff-viewer.component.ts
+│   │   │   │   │   │   ├── diff-viewer.component.html
+│   │   │   │   │   │   └── diff-viewer.component.css
+│   │   │   │   │   ├── summary/
+│   │   │   │   │   │   ├── summary.component.ts
+│   │   │   |   │   │   ├── summary.component.html
+│   │   │   │   │   │   └── summary.component.css
+│   │   │   │   ├── services/
+│   │   │   │   │   ├── comparison.service.ts
+│   │   │   │   ├── models/
+│   │   │   │   │   ├── cell-diff.ts
+│   │   │   │   │   └── summary.ts
+│   │   │   │   ├── app.component.ts
+│   │   │   │   ├── app.component.html
+│   │   │   │   ├── app.module.ts
+│   │   │   │   └── app-routing.module.ts
+│   │   │   ├── assets/
+│   │   │   ├── environments/
+│   │   │   │   ├── environment.ts
+│   │   │   │   └── environment.prod.ts
+│   │   │   ├── styles.css
+│   │   │   ├── index.html
+│   │   ├── angular.json
+│   │   ├── package.json
+│   │   ├── tsconfig.json
+│   │   └── karma.conf.js
+├── docs/
+│   ├── LLD.adoc
+│   └── README.md
+├── ExcelComparisonTool.sln
+└── .gitignore
+```
 
-=== Backend Design (.NET 6)
+== Setup Instructions
+Follow the same setup as in the previous implementation, with no additional dependencies required for merged cell support (EPPlus already supports merged cells).
 
-==== Class Diagram
-....
-[ExcelFile]
-  - Worksheets: List<Worksheet>
-  - Metadata: Dictionary<string, string>
-  + GetWorksheet(name: string): Worksheet
+1. **Backend Setup**:
+   ```bash
+   mkdir ExcelComparisonTool
+   cd ExcelComparisonTool
+   dotnet new sln
+   mkdir backend
+   cd backend
+   mkdir src tests
+   cd src
+   dotnet new classlib -n ExcelComparisonTool.Core
+   dotnet new webapi -n ExcelComparisonTool.Api
+   cd ../tests
+   dotnet new xunit -n ExcelComparisonTool.Tests
+   cd ..
+   dotnet sln add src/ExcelComparisonTool.Core/ExcelComparisonTool.Core.csproj
+   dotnet sln add src/ExcelComparisonTool.Api/ExcelComparisonTool.Api.csproj
+   dotnet sln add tests/ExcelComparisonTool.Tests/ExcelComparisonTool.Tests.csproj
+   cd src/ExcelComparisonTool.Core
+   dotnet add package EPPlus --version 6.0.6
+   dotnet add package Microsoft.Extensions.Logging.Abstractions --version 6.0.0
+   cd ../ExcelComparisonTool.Api
+   dotnet add reference ../ExcelComparisonTool.Core/ExcelComparisonTool.Core.csproj
+   ```
+2. **Frontend Setup**:
+   ```bash
+   cd ../..
+   mkdir frontend
+   cd frontend
+   ng new excel-comparison-tool
+   cd excel-comparison-tool
+   ng add @angular/material
+   ng g component components/file-upload
+   ng g component components/diff-viewer
+   ng g component components/summary
+   ng g service services/comparison
+   ng g interface models/cell-diff
+   ng g interface models/summary
+   ```
+3. **Run the Application**:
+   - Backend: `cd backend/src/ExcelComparisonTool.Api && dotnet run` (runs at `http://localhost:5000`).
+   - Frontend: `cd frontend/excel-comparison-tool && ng serve` (runs at `http://localhost:4200`).
 
-[Worksheet]
-  - Name: string
-  - Cells: Cell[,]
-  - Rows: int
-  - Columns: int
-  + GetCell(row: int, col: int): Cell
+== Backend Code (Updated Files Only)
 
-[Cell]
-  - Row: int
-  - Column: int
-  - Value: string
-  - Formula: string
-  - Style: CellStyle
-  + IsEmpty(): bool
+=== ExcelComparisonTool.Core/Models/MergedCellRange.cs
+[source,csharp]
+----
+namespace ExcelComparisonTool.Core.Models
+{
+    public class MergedCellRange
+    {
+        public string StartCell { get; set; } // e.g., "A1"
+        public string EndCell { get; set; } // e.g., "B2"
+        public string Value { get; set; } = string.Empty;
+        public string Formula { get; set; } = string.Empty;
 
-[CellStyle]
-  - Font: string
-  - BackgroundColor: string
+        public string Range => $"{StartCell}:{EndCell}";
+    }
+}
+----
 
-[DiffModel]
-  - CellDiffs: List<CellDiff>
-  - StructuralDiffs: List<StructuralDiff>
-  - Summary: Summary
-  + AddCellDiff(diff: CellDiff): void
+=== ExcelComparisonTool.Core/Models/Worksheet.cs
+[source,csharp]
+----
+using System.Collections.Generic;
 
-[CellDiff]
-  - Row: int
-  - Column: int
-  - OldValue: string
-  - NewValue: string
-  - OldFormula: string
-  - NewFormula: string
+namespace ExcelComparisonTool.Core.Models
+{
+    public class Worksheet
+    {
+        public string Name { get; set; }
+        public Cell[,] Cells { get; set; }
+        public int Rows { get; set; }
+        public int Columns { get; set; }
+        public List<MergedCellRange> MergedCells { get; set; } = new List<MergedCellRange>();
 
-[StructuralDiff]
-  - Type: string (e.g., "RowAdded", "ColumnDeleted")
-  - Details: string
+        public Cell GetCell(int row, int col)
+        {
+            return (row <= Rows && col <= Columns && row > 0 && col > 0) ? Cells[row - 1, col - 1] : new Cell { Row = row, Column = col };
+        }
+    }
+}
+----
 
-[Summary]
-  - TotalCellChanges: int
-  - TotalFormulaChanges: int
-  - TotalStructuralChanges: int
+=== ExcelComparisonTool.Core/Models/CellDiff.cs
+[source,csharp]
+----
+namespace ExcelComparisonTool.Core.Models
+{
+    public class CellDiff
+    {
+        public int Row { get; set; }
+        public int Column { get; set; }
+        public string OldValue { get; set; } = string.Empty;
+        public string NewValue { get; set; } = string.Empty;
+        public string OldFormula { get; set; } = string.Empty;
+        public string NewFormula { get; set; } = string.Empty;
+        public string MergedRange { get; set; } = string.Empty; // e.g., "A1:B2" for merged cells
+    }
+}
+----
 
-[ComparisonConfig]
-  - CompareValues: bool
-  - CompareFormulas: bool
-  - CompareFormatting: bool
-....
+=== ExcelComparisonTool.Core/Models/DiffModel.cs
+[source,csharp]
+----
+using System.Collections.Generic;
 
-==== Class Descriptions
-- *ExcelFile*: Represents an Excel workbook with a list of worksheets and metadata (e.g., author, last modified).
-- *Worksheet*: Represents a sheet with a 2D array of cells, row/column counts, and name.
-- *Cell*: Stores cell data (value, formula, style) and position.
-- *CellStyle*: Captures formatting (font, background color).
-- *DiffModel*: Aggregates comparison results, including cell differences, structural differences, and summary.
-- *CellDiff*: Represents a single cell difference (value or formula).
-- *StructuralDiff*: Describes structural changes (e.g., added rows).
-- *Summary*: Summarizes total changes.
-- *ComparisonConfig*: Specifies comparison scope (values, formulas, formatting).
+namespace ExcelComparisonTool.Core.Models
+{
+    public class DiffModel
+    {
+        public List<CellDiff> CellDiffs { get; set; } = new List<CellDiff>();
+        public List<StructuralDiff> StructuralDiffs { get; set; } = new List<StructuralDiff>();
+        public Summary Summary { get; set; } = new Summary();
 
-==== Backend Components
-- *ExcelReaderService*:
-  - Responsibility: Reads .xlsx files using EPPlus, populating `ExcelFile` models.
-  - Methods:
-    - `Task<ExcelFile> ReadAsync(Stream stream)`: Loads file into `ExcelFile`.
-  - Dependencies: EPPlus, Logger.
-- *ExcelWriterService*:
-  - Responsibility: Generates output .xlsx files with highlighted differences.
-  - Methods:
-    - `Task<Stream> WriteAsync(DiffModel diffModel)`: Creates output file with red highlights for changed cells.
-  - Dependencies: EPPlus, Logger.
-- *ComparisonEngine*:
-  - Responsibility: Compares two `ExcelFile` objects, producing a `DiffModel`.
-  - Methods:
-    - `Task<DiffModel> CompareAsync(Stream file1, Stream file2, ComparisonConfig config)`: Compares files based on config.
-  - Dependencies: ExcelReaderService, Logger.
-- *MergeHandler*:
-  - Responsibility: Applies merge operations to update an Excel file.
-  - Methods:
-    - `Task<Stream> MergeAsync(Stream baseFile, List<CellDiff> acceptedDiffs)`: Updates file with accepted changes.
-  - Dependencies: ExcelWriterService, Logger.
-- *ReportGenerator*:
-  - Responsibility: Creates summary reports.
-  - Methods:
-    - `Summary GenerateSummary(DiffModel diffModel)`: Generates summary data.
-  - Dependencies: None.
-- *Logger*:
-  - Responsibility: Logs operations and errors using Serilog.
-  - Methods:
-    - `LogInfo(string message)`: Logs informational messages.
-    - `LogError(Exception ex, string message)`: Logs errors.
-- *ErrorHandler*:
-  - Responsibility: Handles exceptions and returns user-friendly messages.
-  - Methods:
-    - `string Handle(Exception ex)`: Converts exceptions to messages.
+        public void AddCellDiff(CellDiff diff)
+        {
+            CellDiffs.Add(diff);
+            if (!string.IsNullOrEmpty(diff.MergedRange))
+                Summary.TotalMergedCellChanges++;
+            else if (!string.IsNullOrEmpty(diff.OldValue) || !string.IsNullOrEmpty(diff.NewValue))
+                Summary.TotalCellChanges++;
+            else if (!string.IsNullOrEmpty(diff.OldFormula) || !string.IsNullOrEmpty(diff.NewFormula))
+                Summary.TotalFormulaChanges++;
+        }
+    }
+}
+----
 
-==== API Endpoints
-[cols="1,1,2",options="header"]
-|===
-| Endpoint | Method | Description
-| `/api/comparison/compare` | POST | Uploads two .xlsx files, returns `DiffModel` as JSON.
-| `/api/comparison/merge` | POST | Applies merge operations, returns updated file stream.
-| `/api/comparison/download` | GET | Downloads output .xlsx file with highlighted differences.
-| `/api/comparison/summary` | GET | Returns summary report as JSON.
-|===
+=== ExcelComparisonTool.Core/Models/Summary.cs
+[source,csharp]
+----
+namespace ExcelComparisonTool.Core.Models
+{
+    public class Summary
+    {
+        public int TotalCellChanges { get; set; }
+        public int TotalFormulaChanges { get; set; }
+        public int TotalStructuralChanges { get; set; }
+        public int TotalMergedCellChanges { get; set; }
+    }
+}
+----
 
-==== API Implementation Details
-- *POST /api/comparison/compare*:
-  - Input: Multipart form data with two files (`file1`, `file2`) and `ComparisonConfig`.
-  - Workflow:
-    1. Validate file extensions and sizes.
-    2. Call `ExcelReaderService.ReadAsync` for both files.
-    3. Pass `ExcelFile` objects to `ComparisonEngine.CompareAsync`.
-    4. Return `DiffModel` as JSON.
-  - Response: HTTP 200 with `DiffModel` or 400 for invalid inputs.
-- *POST /api/comparison/merge*:
-  - Input: Base file and list of accepted `CellDiff` objects.
-  - Workflow:
-    1. Validate inputs.
-    2. Call `MergeHandler.MergeAsync` to update file.
-    3. Return updated file stream.
-  - Response: HTTP 200 with file stream or 400 for errors.
-- *GET /api/comparison/download*:
-  - Workflow: Call `ExcelWriterService.WriteAsync` with cached `DiffModel`, return file stream.
-  - Response: HTTP 200 with .xlsx file.
-- *GET /api/comparison/summary*:
-  - Workflow: Call `ReportGenerator.GenerateSummary` with cached `DiffModel`.
-  - Response: HTTP 200 with `Summary` JSON.
+=== ExcelComparisonTool.Core/Services/ExcelReaderService.cs
+[source,csharp]
+----
+using OfficeOpenXml;
+using System;
+using System.Threading.Tasks;
+using ExcelComparisonTool.Core.Models;
+using Microsoft.Extensions.Logging;
 
-==== Backend Workflow
-1. User uploads files via Angular frontend.
-2. API controller validates inputs and saves files temporarily.
-3. `ExcelReaderService` loads files into `ExcelFile` models.
-4. `ComparisonEngine` compares files, producing a `DiffModel`.
-5. `ExcelWriterService` generates an output .xlsx file with highlighted differences.
-6. `ReportGenerator` creates a summary.
-7. API returns `DiffModel` or file stream to frontend.
-8. For merge, `MergeHandler` updates the base file based on user selections.
+namespace ExcelComparisonTool.Core.Services
+{
+    public class ExcelReaderService
+    {
+        private readonly ILogger<ExcelReaderService> _logger;
 
-=== Frontend Design (Angular 17)
+        public ExcelReaderService(ILogger<ExcelReaderService> logger)
+        {
+            _logger = logger;
+        }
 
-==== Component Diagram
-....
-[AppComponent]
-  |
-  +--[FileUploadComponent]
-  +--[DiffViewerComponent]
-  +--[MergeComponent]
-  +--[SummaryComponent]
-....
+        public async Task<ExcelFile> ReadAsync(Stream stream)
+        {
+            _logger.LogInformation("Reading Excel file");
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            using var package = new ExcelPackage(stream);
+            var excelFile = new ExcelFile();
 
-==== Angular Components
-- *FileUploadComponent*:
-  - Responsibility: Allows users to upload two .xlsx files and set comparison options.
-  - Template: `file-upload.component.html` with drag-and-drop inputs and Angular Material button.
-  - Properties:
-    - `file1: File`: First Excel file.
-    - `file2: File`: Second Excel file.
-    - `config: ComparisonConfig`: Comparison options.
-  - Methods:
-    - `onFileChange(event: Event, fileNumber: number)`: Updates file properties.
-    - `compare()`: Calls `ComparisonService.compare`.
-  - Dependencies: ComparisonService, Angular Material.
-- *DiffViewerComponent*:
-  - Responsibility: Displays differences in a side-by-side or inline table.
-  - Template: `diff-viewer.component.html` with Angular Material table or PrimeNG DataTable.
-  - Properties:
-    - `diffModel: DiffModel`: Comparison results.
-  - Methods:
-    - `ngOnInit()`: Fetches `DiffModel` from `ComparisonService`.
-  - Dependencies: ComparisonService, Angular Material/PrimeNG.
-- *MergeComponent*:
-  - Responsibility: Allows users to accept/reject changes.
-  - Template: `merge.component.html` with checkboxes for each `CellDiff`.
-  - Properties:
-    - `diffModel: DiffModel`: Comparison results.
-    - `acceptedDiffs: CellDiff[]`: User-selected changes.
-  - Methods:
-    - `acceptDiff(diff: CellDiff)`: Adds diff to `acceptedDiffs`.
-    - `merge()`: Calls `MergeService.merge`.
-  - Dependencies: MergeService, Angular Material.
-- *SummaryComponent*:
-  - Responsibility: Displays summary report.
-  - Template: `summary.component.html` with summary stats and download button.
-  - Properties:
-    - `summary: Summary`: Summary data.
-  - Methods:
-    - `ngOnInit()`: Fetches summary from `ComparisonService`.
-    - `download()`: Calls `ComparisonService.download`.
-  - Dependencies: ComparisonService, Angular Material.
+            foreach (var worksheet in package.Workbook.Worksheets)
+            {
+                var ws = new Worksheet
+                {
+                    Name = worksheet.Name,
+                    Rows = worksheet.Dimension?.Rows ?? 0,
+                    Columns = worksheet.Dimension?.Columns ?? 0
+                };
+                ws.Cells = new Cell[ws.Rows, ws.Columns];
 
-==== Angular Services
-- *ComparisonService*:
-  - Responsibility: Handles API calls for comparison and download.
-  - Methods:
-    - `compare(file1: File, file2: File, config: ComparisonConfig): Observable<DiffModel>`: Calls `/api/comparison/compare`.
-    - `download(): Observable<Blob>`: Calls `/api/comparison/download`.
-    - `getSummary(): Observable<Summary>`: Calls `/api/comparison/summary`.
-  - Dependencies: HttpClient.
-- *MergeService*:
-  - Responsibility: Handles merge API calls.
-  - Methods:
-    - `merge(baseFile: File, acceptedDiffs: CellDiff[]): Observable<Blob>`: Calls `/api/comparison/merge`.
-  - Dependencies: HttpClient.
+                // Read cells
+                for (int row = 1; row <= ws.Rows; row++)
+                {
+                    for (int col = 1; col <= ws.Columns; col++)
+                    {
+                        ws.Cells[row - 1, col - 1] = new Cell
+                        {
+                            Row = row,
+                            Column = col,
+                            Value = worksheet.Cells[row, col].Text ?? string.Empty,
+                            Formula = worksheet.Cells[row, col].Formula ?? string.Empty
+                        };
+                    }
+                }
 
-==== Frontend Models
-- `cell-diff.ts`:
-```typescript
+                // Read merged cells
+                foreach (var mergedRange in worksheet.MergedCells)
+                {
+                    var range = worksheet.Cells[mergedRange];
+                    ws.MergedCells.Add(new MergedCellRange
+                    {
+                        StartCell = range.Start.Address,
+                        EndCell = range.End.Address,
+                        Value = range.Text ?? string.Empty,
+                        Formula = range.Formula ?? string.Empty
+                    });
+                }
+
+                excelFile.Worksheets.Add(ws);
+            }
+
+            _logger.LogInformation("Excel file read successfully");
+            return excelFile;
+        }
+    }
+}
+----
+
+=== ExcelComparisonTool.Core/Services/ExcelWriterService.cs
+[source,csharp]
+----
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using ExcelComparisonTool.Core.Models;
+using Microsoft.Extensions.Logging;
+
+namespace ExcelComparisonTool.Core.Services
+{
+    public class ExcelWriterService
+    {
+        private readonly ILogger<ExcelWriterService> _logger;
+
+        public ExcelWriterService(ILogger<ExcelWriterService> logger)
+        {
+            _logger = logger;
+        }
+
+        public async Task<Stream> WriteAsync(DiffModel diffModel)
+        {
+            _logger.LogInformation("Writing output Excel file");
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            using var package = new ExcelPackage();
+            var worksheet = package.Workbook.Worksheets.Add("Differences");
+
+            foreach (var diff in diffModel.CellDiffs)
+            {
+                var cell = worksheet.Cells[diff.Row, diff.Column];
+                string displayValue = string.IsNullOrEmpty(diff.MergedRange)
+                    ? $"{diff.OldValue} -> {diff.NewValue}"
+                    : $"Merged {diff.MergedRange}: {diff.OldValue} -> {diff.NewValue}";
+                cell.Value = displayValue;
+                cell.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                cell.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.Red);
+            }
+
+            var stream = new MemoryStream();
+            await package.SaveAsync(stream);
+            stream.Position = 0;
+            _logger.LogInformation("Output Excel file written successfully");
+            return stream;
+        }
+    }
+}
+----
+
+=== ExcelComparisonTool.Core/Services/ComparisonEngine.cs
+[source,csharp]
+----
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using ExcelComparisonTool.Core.Models;
+using Microsoft.Extensions.Logging;
+
+namespace ExcelComparisonTool.Core.Services
+{
+    public class ComparisonEngine
+    {
+        private readonly ExcelReaderService _reader;
+        private readonly ILogger<ComparisonEngine> _logger;
+
+        public ComparisonEngine(ExcelReaderService reader, ILogger<ComparisonEngine> logger)
+        {
+            _reader = reader;
+            _logger = logger;
+        }
+
+        public async Task<DiffModel> CompareAsync(Stream file1, Stream file2, ComparisonConfig config)
+        {
+            _logger.LogInformation("Starting comparison");
+            var excel1 = await _reader.ReadAsync(file1);
+            var excel2 = await _reader.ReadAsync(file2);
+            var diffModel = new DiffModel();
+
+            foreach (var sheet1 in excel1.Worksheets)
+            {
+                var sheet2 = excel2.GetWorksheet(sheet1.Name);
+                if (sheet2 == null)
+                {
+                    diffModel.StructuralDiffs.Add(new StructuralDiff { Type = "SheetMissing", Details = sheet1.Name });
+                    diffModel.Summary.TotalStructuralChanges++;
+                    continue;
+                }
+
+                // Compare merged cells
+                foreach (var merge1 in sheet1.MergedCells)
+                {
+                    var merge2 = sheet2.MergedCells.FirstOrDefault(m => m.Range == merge1.Range);
+                    if (merge2 == null)
+                    {
+                        diffModel.AddCellDiff(new CellDiff
+                        {
+                            Row = GetRowFromAddress(merge1.StartCell),
+                            Column = GetColumnFromAddress(merge1.StartCell),
+                            MergedRange = merge1.Range,
+                            OldValue = merge1.Value,
+                            NewValue = string.Empty
+                        });
+                        continue;
+                    }
+
+                    if (config.CompareValues && merge1.Value != merge2.Value)
+                    {
+                        diffModel.AddCellDiff(new CellDiff
+                        {
+                            Row = GetRowFromAddress(merge1.StartCell),
+                            Column = GetColumnFromAddress(merge1.StartCell),
+                            MergedRange = merge1.Range,
+                            OldValue = merge1.Value,
+                            NewValue = merge2.Value
+                        });
+                    }
+
+                    if (config.CompareFormulas && merge1.Formula != merge2.Formula)
+                    {
+                        diffModel.AddCellDiff(new CellDiff
+                        {
+                            Row = GetRowFromAddress(merge1.StartCell),
+                            Column = GetColumnFromAddress(merge1.StartCell),
+                            MergedRange = merge1.Range,
+                            OldFormula = merge1.Formula,
+                            NewFormula = merge2.Formula
+                        });
+                    }
+                }
+
+                // Compare non-merged cells
+                int maxRows = Math.Max(sheet1.Rows, sheet2.Rows);
+                int maxCols = Math.Max(sheet1.Columns, sheet2.Columns);
+
+                for (int row = 1; row <= maxRows; row++)
+                {
+                    for (int col = 1; col <= maxCols; col++)
+                    {
+                        // Skip if cell is part of a merged range
+                        if (sheet1.MergedCells.Any(m => IsCellInRange(row, col, m.Range)) ||
+                            sheet2.MergedCells.Any(m => IsCellInRange(row, col, m.Range)))
+                            continue;
+
+                        var cell1 = sheet1.GetCell(row, col);
+                        var cell2 = sheet2.GetCell(row, col);
+
+                        if (config.CompareValues && cell1.Value != cell2.Value)
+                        {
+                            diffModel.AddCellDiff(new CellDiff
+                            {
+                                Row = row,
+                                Column = col,
+                                OldValue = cell1.Value,
+                                NewValue = cell2.Value
+                            });
+                        }
+
+                        if (config.CompareFormulas && cell1.Formula != cell2.Formula)
+                        {
+                            diffModel.AddCellDiff(new CellDiff
+                            {
+                                Row = row,
+                                Column = col,
+                                OldFormula = cell1.Formula,
+                                NewFormula = cell2.Formula
+                            });
+                        }
+                    }
+                }
+            }
+
+            _logger.LogInformation($"Comparison completed: {diffModel.Summary.TotalCellChanges} cell changes, {diffModel.Summary.TotalMergedCellChanges} merged cell changes");
+            return diffModel;
+        }
+
+        private int GetRowFromAddress(string address)
+        {
+            return int.Parse(address.Substring(1)); // e.g., "A1" -> 1
+        }
+
+        private int GetColumnFromAddress(string address)
+        {
+            string col = address.Substring(0, address.Length - address.Skip(1).TakeWhile(char.IsDigit).Count());
+            return col.Aggregate(0, (current, c) => current * 26 + (c - 'A' + 1));
+        }
+
+        private bool IsCellInRange(int row, int col, string range)
+        {
+            var parts = range.Split(':');
+            int startRow = int.Parse(parts[0].Substring(1));
+            int endRow = int.Parse(parts[1].Substring(1));
+            int startCol = GetColumnFromAddress(parts[0]);
+            int endCol = GetColumnFromAddress(parts[1]);
+            return row >= startRow && row <= endRow && col >= startCol && col <= endCol;
+        }
+    }
+}
+----
+
+=== ExcelComparisonTool.Tests/UnitTests/ComparisonEngineTests.cs
+[source,csharp]
+----
+using System.IO;
+using System.Threading.Tasks;
+using ExcelComparisonTool.Core.Services;
+using ExcelComparisonTool.Core.Models;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Xunit;
+
+namespace ExcelComparisonTool.Tests.UnitTests
+{
+    public class ComparisonEngineTests
+    {
+        [Fact]
+        public async Task CompareAsync_DifferentValues_ReturnsCellDiffs()
+        {
+            var logger = new Mock<ILogger<ComparisonEngine>>().Object;
+            var readerMock = new Mock<ExcelReaderService>(logger);
+            readerMock.Setup(r => r.ReadAsync(It.IsAny<Stream>())).ReturnsAsync(new ExcelFile
+            {
+                Worksheets = { new Worksheet
+                {
+                    Name = "Sheet1",
+                    Rows = 1,
+                    Columns = 1,
+                    Cells = new Cell[,] { { new Cell { Row = 1, Column = 1, Value = "A" } } }
+                }}
+            });
+
+            var engine = new ComparisonEngine(readerMock.Object, logger);
+            var config = new ComparisonConfig { CompareValues = true };
+
+            using var stream1 = new MemoryStream();
+            using var stream2 = new MemoryStream();
+            var diffModel = await engine.CompareAsync(stream1, stream2, config);
+
+            Assert.NotNull(diffModel);
+            Assert.Equal(1, diffModel.Summary.TotalCellChanges);
+        }
+
+        [Fact]
+        public async Task CompareAsync_DifferentMergedCells_ReturnsMergedCellDiffs()
+        {
+            var logger = new Mock<ILogger<ComparisonEngine>>().Object;
+            var readerMock = new Mock<ExcelReaderService>(logger);
+            readerMock.Setup(r => r.ReadAsync(It.IsAny<Stream>())).ReturnsAsync(new ExcelFile
+            {
+                Worksheets = { new Worksheet
+                {
+                    Name = "Sheet1",
+                    Rows = 2,
+                    Columns = 2,
+                    Cells = new Cell[2, 2],
+                    MergedCells = { new MergedCellRange { StartCell = "A1", EndCell = "B2", Value = "Merged" } }
+                }}
+            });
+
+            var engine = new ComparisonEngine(readerMock.Object, logger);
+            var config = new ComparisonConfig { CompareValues = true };
+
+            using var stream1 = new MemoryStream();
+            using var stream2 = new MemoryStream();
+            var diffModel = await engine.CompareAsync(stream1, stream2, config);
+
+            Assert.NotNull(diffModel);
+            Assert.Equal(1, diffModel.Summary.TotalMergedCellChanges);
+        }
+    }
+}
+----
+
+== Frontend Code (Updated Files Only)
+
+=== frontend/excel-comparison-tool/src/app/models/cell-diff.ts
+[source,typescript]
+----
 export interface CellDiff {
   row: number;
   column: number;
@@ -232,185 +596,153 @@ export interface CellDiff {
   newValue: string;
   oldFormula: string;
   newFormula: string;
+  mergedRange: string; // e.g., "A1:B2"
 }
-```
-- `summary.ts`:
-```typescript
+
+export interface DiffModel {
+  cellDiffs: CellDiff[];
+  structuralDiffs: { type: string; details: string }[];
+  summary: Summary;
+}
+----
+
+=== frontend/excel-comparison-tool/src/app/models/summary.ts
+[source,typescript]
+----
 export interface Summary {
   totalCellChanges: number;
   totalFormulaChanges: number;
   totalStructuralChanges: number;
+  totalMergedCellChanges: number;
 }
-```
+----
 
-==== Routing
-- Routes defined in `app-routing.module.ts`:
-  - `/upload`: FileUploadComponent
-  - `/diff`: DiffViewerComponent
-  - `/merge`: MergeComponent
-  - `/summary`: SummaryComponent
+=== frontend/excel-comparison-tool/src/app/components/diff-viewer/diff-viewer.component.ts
+[source,typescript]
+----
+import { Component, OnInit } from '@angular/core';
+import { ComparisonService } from '../../services/comparison.service';
+import { CellDiff } from '../../models/cell-diff';
+import { Router } from '@angular/router';
 
-==== Frontend Workflow
-1. User navigates to `/upload`, selects two .xlsx files, and sets comparison options.
-2. `FileUploadComponent` calls `ComparisonService.compare`, sending files to the backend.
-3. Backend returns `DiffModel`, stored in `ComparisonService`.
-4. User navigates to `/diff`, where `DiffViewerComponent` displays differences in a table.
-5. User navigates to `/merge`, selects changes in `MergeComponent`, and calls `MergeService.merge`.
-6. User navigates to `/summary`, where `SummaryComponent` shows stats and offers a download link.
+@Component({
+  selector: 'app-diff-viewer',
+  templateUrl: './diff-viewer.component.html',
+  styleUrls: ['./diff-viewer.component.css']
+})
+export class DiffViewerComponent implements OnInit {
+  displayedColumns: string[] = ['row', 'column', 'mergedRange', 'oldValue', 'newValue', 'oldFormula', 'newFormula'];
+  dataSource: CellDiff[] = [];
 
-=== Database/Storage
-- *Temporary Storage*: Store uploaded files in a server-side temp directory (e.g., `wwwroot/temp`).
-- *Cleanup*: Delete temp files after 1 hour or on session end.
-- *Caching*: Use `IMemoryCache` to store `DiffModel` for 10 minutes to optimize download/summary requests.
+  constructor(private comparisonService: ComparisonService, private router: Router) {}
 
-=== Error Handling
-- *Backend*:
-  - Validate file extensions (.xlsx) and sizes (<100MB).
-  - Return HTTP 400 for invalid inputs, 500 for server errors.
-  - Log errors with Serilog (e.g., file corruption, out-of-memory).
-- *Frontend*:
-  - Display errors in Angular Material dialogs (e.g., "Invalid file format").
-  - Log client-side errors to console.
+  ngOnInit() {
+    const diffModel = this.comparisonService.getDiffModel();
+    if (diffModel) {
+      this.dataSource = diffModel.cellDiffs;
+    } else {
+      this.router.navigate(['/upload']);
+    }
+  }
 
-=== Logging
-- *Backend*: Use Serilog to log file uploads, comparison steps, and errors to a file (`logs/log.txt`).
-- *Frontend*: Log API call results and errors to browser console.
+  goToSummary() {
+    this.router.navigate(['/summary']);
+  }
 
-== Folder Structure
-The project follows the folder structure from the LLD:
+  download() {
+    this.comparisonService.download().subscribe(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'differences.xlsx';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    });
+  }
+}
+----
 
-```
-ExcelComparisonTool/
-??? backend/
-?   ??? src/
-?   ?   ??? ExcelComparisonTool.Core/
-?   ?   ?   ??? Models/
-?   ?   ?   ?   ??? ExcelFile.cs
-?   ?   ?   ?   ??? Worksheet.cs
-?   ?   ?   ?   ??? Cell.cs
-?   ?   ?   ?   ??? DiffModel.cs
-?   ?   ?   ?   ??? ComparisonConfig.cs
-?   ?   ?   ??? Services/
-?   ?   ?   ?   ??? ExcelReaderService.cs
-?   ?   ?   ?   ??? ExcelWriterService.cs
-?   ?   ?   ?   ??? ComparisonEngine.cs
-?   ?   ?   ?   ??? ReportGenerator.cs
-?   ?   ?   ??? Utilities/
-?   ?   ?   ?   ??? Logger.cs
-?   ?   ?   ?   ??? ErrorHandler.cs
-?   ?   ?   ??? ExcelComparisonTool.Core.csproj
-?   ?   ?   ??? appsettings.json
-?   ?   ??? ExcelComparisonTool.Api/
-?   ?   ?   ??? Controllers/
-?   ?   ?   ?   ??? ComparisonController.cs
-?   ?   ?   ??? Program.cs
-?   ?   ?   ??? ExcelComparisonTool.Api.csproj
-?   ?   ?   ??? appsettings.json
-?   ??? tests/
-?   ?   ??? ExcelComparisonTool.Tests/
-?   ?   ?   ??? UnitTests/
-?   ?   ?   ?   ??? ComparisonEngineTests.cs
-?   ?   ?   ??? TestData/
-?   ?   ?   ?   ??? TestSheet1.xlsx
-?   ?   ?   ?   ??? TestSheet2.xlsx
-?   ?   ?   ??? ExcelComparisonTool.Tests.csproj
-??? frontend/
-?   ??? excel-comparison-tool/
-?   ?   ??? src/
-?   ?   ?   ??? app/
-?   ?   ?   ?   ??? components/
-?   ?   ?   ?   ?   ??? file-upload/
-?   ?   ?   ?   ?   ?   ??? file-upload.component.ts
-?   ?   ?   ?   ?   ?   ??? file-upload.component.html
-?   ?   ?   ?   ?   ?   ??? file-upload.component.css
-?   ?   ?   ?   ?   ??? diff-viewer/
-?   ?   ?   ?   ?   ?   ??? diff-viewer.component.ts
-?   ?   ?   ?   ?   ?   ??? diff-viewer.component.html
-?   ?   ?   ?   ?   ?   ??? diff-viewer.component.css
-?   ?   ?   ?   ?   ??? summary/
-?   ?   ?   ?   ?   ?   ??? summary.component.ts
-?   ?   ?   ?   ?   ?   ??? summary.component.html
-?   ?   ?   ?   ?   ?   ??? summary.component.css
-?   ?   ?   ?   ??? services/
-?   ?   ?   ?   ?   ??? comparison.service.ts
-?   ?   ?   ?   ??? models/
-?   ?   ?   ?   ?   ??? cell-diff.ts
-?   ?   ?   ?   ?   ??? summary.ts
-?   ?   ?   ?   ??? app.component.ts
-?   ?   ?   ?   ??? app.component.html
-?   ?   ?   ?   ??? app.module.ts
-?   ?   ?   ?   ??? app-routing.module.ts
-?   ?   ?   ??? assets/
-?   ?   ?   ??? environments/
-?   ?   ?   ?   ??? environment.ts
-?   ?   ?   ?   ??? environment.prod.ts
-?   ?   ?   ??? styles.css
-?   ?   ?   ??? index.html
-?   ?   ??? angular.json
-?   ?   ??? package.json
-?   ?   ??? tsconfig.json
-?   ?   ??? karma.conf.js
-??? docs/
-?   ??? LLD.adoc
-?   ??? README.md
-??? ExcelComparisonTool.sln
-??? .gitignore
-```
+=== frontend/excel-comparison-tool/src/app/components/diff-viewer/diff-viewer.component.html
+[source,html]
+----
+<div class="container">
+  <h2>Differences</h2>
+  <mat-table [dataSource]="dataSource">
+    <ng-container matColumnDef="row">
+      <mat-header-cell *matHeaderCellDef>Row</mat-header-cell>
+      <mat-cell *matCellDef="let diff">{{diff.row}}</mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="column">
+      <mat-header-cell *matHeaderCellDef>Column</mat-header-cell>
+      <mat-cell *matCellDef="let diff">{{diff.column}}</mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="mergedRange">
+      <mat-header-cell *matHeaderCellDef>Merged Range</mat-header-cell>
+      <mat-cell *matCellDef="let diff">{{diff.mergedRange || '-'}}</mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="oldValue">
+      <mat-header-cell *matHeaderCellDef>Old Value</mat-header-cell>
+      <mat-cell *matCellDef="let diff">{{diff.oldValue}}</mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="newValue">
+      <mat-header-cell *matHeaderCellDef>New Value</mat-header-cell>
+      <mat-cell *matCellDef="let diff">{{diff.newValue}}</mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="oldFormula">
+      <mat-header-cell *matHeaderCellDef>Old Formula</mat-header-cell>
+      <mat-cell *matCellDef="let diff">{{diff.oldFormula}}</mat-cell>
+    </ng-container>
+    <ng-container matColumnDef="newFormula">
+      <mat-header-cell *matHeaderCellDef>New Formula</mat-header-cell>
+      <mat-cell *matCellDef="let diff">{{diff.newFormula}}</mat-cell>
+    </ng-container>
+    <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+    <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+  </mat-table>
+  <button mat-raised-button color="primary" (click)="goToSummary()">View Summary</button>
+  <button mat-raised-button color="accent" (click)="download()">Download Output</button>
+</div>
+----
 
-== Setup Instructions
-1. **Backend Setup**:
-   - Create a .NET 6 solution:
-     ```bash
-     mkdir ExcelComparisonTool
-     cd ExcelComparisonTool
-     dotnet new sln
-     mkdir backend
-     cd backend
-     mkdir src tests
-     cd src
-     dotnet new classlib -n ExcelComparisonTool.Core
-     dotnet new webapi -n ExcelComparisonTool.Api
-     cd ../tests
-     dotnet new xunit -n ExcelComparisonTool.Tests
-     cd ..
-     dotnet sln add src/ExcelComparisonTool.Core/ExcelComparisonTool.Core.csproj
-     dotnet sln add src/ExcelComparisonTool.Api/ExcelComparisonTool.Api.csproj
-     dotnet sln add tests/ExcelComparisonTool.Tests/ExcelComparisonTool.Tests.csproj
-     ```
-   - Install dependencies for `ExcelComparisonTool.Core`:
-     ```bash
-     cd src/ExcelComparisonTool.Core
-     dotnet add package EPPlus --version 6.0.6
-     dotnet add package Microsoft.Extensions.Logging.Abstractions --version 6.0.0
-     ```
-   - Add Core reference to API:
-     ```bash
-     cd ../ExcelComparisonTool.Api
-     dotnet add reference ../ExcelComparisonTool.Core/ExcelComparisonTool.Core.csproj
-     ```
-2. **Frontend Setup**:
-   - Create Angular project:
-     ```bash
-     cd ../..
-     mkdir frontend
-     cd frontend
-     ng new excel-comparison-tool
-     cd excel-comparison-tool
-     ng add @angular/material
-     ng g component components/file-upload
-     ng g component components/diff-viewer
-     ng g component components/summary
-     ng g service services/comparison
-     ng g interface models/cell-diff
-     ng g interface models/summary
-     ```
-3. **Run the Application**:
-   - Backend: `cd backend/src/ExcelComparisonTool.Api && dotnet run`
-   - Frontend: `cd frontend/excel-comparison-tool && ng serve`
-   - Access at `http://localhost:4200`, with backend at `http://localhost:5000`.
+=== frontend/excel-comparison-tool/src/app/components/summary/summary.component.html
+[source,html]
+----
+<div class="container">
+  <h2>Summary</h2>
+  <div *ngIf="summary">
+    <p>Total Cell Changes: {{summary.totalCellChanges}}</p>
+    <p>Total Formula Changes: {{summary.totalFormulaChanges}}</p>
+    <p>Total Structural Changes: {{summary.totalStructuralChanges}}</p>
+    <p>Total Merged Cell Changes: {{summary.totalMergedCellChanges}}</p>
+  </div>
+  <button mat-raised-button color="primary" (click)="router.navigate(['/upload'])">Back to Upload</button>
+</div>
+----
 
+== Unchanged Files
+All other files (`ExcelFile.cs`, `Cell.cs`, `StructuralDiff.cs`, `ComparisonConfig.cs`, `ReportGenerator.cs`, `Logger.cs`, `ErrorHandler.cs`, `ComparisonController.cs`, `Program.cs`, `ExcelComparisonTool.Core.csproj`, `ExcelComparisonTool.Api.csproj`, `appsettings.json`, `ExcelComparisonTool.Tests.csproj`, `app.component.ts`, `app.component.html`, `app.module.ts`, `app-routing.module.ts`, `file-upload.component.ts`, `file-upload.component.html`, `file-upload.component.css`, `comparison.service.ts`, `environment.ts`, `environment.prod.ts`, `styles.css`, `index.html`, `angular.json`, `package.json`, `tsconfig.json`, `karma.conf.js`, `ExcelComparisonTool.sln`, `.gitignore`) remain identical to the previous implementation.
 
+== Notes
+- *Merged Cell Support*:
+  - Detects merged cell ranges using EPPlus’s `MergedCells` property.
+  - Compares merged cell ranges by their boundaries (`A1:B2`), values, and formulas.
+  - Displays merged cell differences in the frontend with a `Merged Range` column.
+  - Highlights merged cell differences in the output Excel file.
+- *Features Implemented*: File upload, cell value/formula comparison, merged cell comparison, diff visualization, output generation, summary report.
+- *Not Implemented*: Merge functionality, formatting comparison (extend `CellStyle`).
+- *Testing*: Added a unit test for merged cell comparison. Create test files in `backend/tests/TestData/` with merged cells (e.g., merge `A1:B2` in one file with different values).
+- *Performance*: Handles small to medium files. For large files, enable EPPlus streaming and Angular virtual scrolling.
+- *Security*: Validates file extensions. Add file scanning for production.
+
+== Testing Merged Cell Support
+1. Create two .xlsx files:
+   - `TestSheet1.xlsx`: Merge cells `A1:B2` with value "Merged1".
+   - `TestSheet2.xlsx`: Merge cells `A1:B2` with value "Merged2".
+2. Upload via the frontend at `http://localhost:4200/upload`.
+3. Verify the diff table shows a merged cell difference for `A1:B2`.
+4. Check the output file (`differences.xlsx`) for highlighted merged cell changes.
+5. Run unit tests: `cd backend/tests/ExcelComparisonTool.Tests && dotnet test`.
 
 == Conclusion
-This implementation provides a complete, runnable Excel Comparison Tool with a .NET 6 backend and Angular 17 frontend. It supports core comparison features and is extensible for merge and formatting comparison. Follow the setup instructions to build and run the application.
+This updated implementation extends the Excel Comparison Tool to support merged cell use cases, maintaining all existing features. The .NET 6 backend handles merged cell detection and comparison, while the Angular 17 frontend displays these differences clearly. The solution is modular, scalable, and ready for further enhancements like merge functionality or formatting comparison.
 ```
